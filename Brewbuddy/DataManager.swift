@@ -9,31 +9,95 @@ import Foundation
 import SwiftData
 
 class DataManager {
+    
+    // 从 JSON 文件加载数据并预加载到数据库
     static func preloadSampleData(modelContext: ModelContext) {
-        // 检查是否已经有数据
-        let descriptor = FetchDescriptor<Drink>()
+        // 尝试从 JSON 文件加载数据
+        if let drinks = loadDrinksFromJSON() {
+            // 将加载的数据添加到数据库
+            for drink in drinks {
+                modelContext.insert(drink)
+            }
+            print("成功从 JSON 文件加载了 \(drinks.count) 个饮品")
+        } else {
+            // 如果 JSON 加载失败，使用硬编码的示例数据
+            let sampleDrinks = createSampleDrinks()
+            for drink in sampleDrinks {
+                modelContext.insert(drink)
+            }
+            print("使用硬编码的示例数据，加载了 \(sampleDrinks.count) 个饮品")
+        }
         
         do {
-            let existingDrinks = try modelContext.fetch(descriptor)
-            if !existingDrinks.isEmpty {
-                print("数据已存在，跳过预加载")
-                return
-            }
+            try modelContext.save()
+            print("数据保存成功")
         } catch {
-            print("检查现有数据时出错: \(error)")
+            print("保存数据时出错: \(error)")
         }
-        
-        // 创建示例数据
-        let drinks = createSampleDrinks()
-        
-        // 保存到数据库
-        for drink in drinks {
-            modelContext.insert(drink)
-        }
-        
-        print("成功预加载 \(drinks.count) 个饮品")
     }
     
+    // 从 JSON 文件加载饮品数据
+    private static func loadDrinksFromJSON() -> [Drink]? {
+        guard let url = Bundle.main.url(forResource: "drinks", withExtension: "json") else {
+            print("未找到 drinks.json 文件")
+            return nil
+        }
+        
+        do {
+            let data = try Data(contentsOf: url)
+            let decoder = JSONDecoder()
+            let drinkData = try decoder.decode([DrinkData].self, from: data)
+            
+            // 将 DrinkData 转换为 Drink 模型
+            return drinkData.map { drinkData in
+                let nutritionTall = drinkData.nutritionTall != nil ? 
+                    Nutrition(
+                        calories: drinkData.nutritionTall!.calories,
+                        caffeine: drinkData.nutritionTall!.caffeine,
+                        fat: drinkData.nutritionTall!.fat,
+                        sugar: drinkData.nutritionTall!.sugar,
+                        protein: drinkData.nutritionTall!.protein
+                    ) : nil
+                
+                let nutritionGrande = drinkData.nutritionGrande != nil ? 
+                    Nutrition(
+                        calories: drinkData.nutritionGrande!.calories,
+                        caffeine: drinkData.nutritionGrande!.caffeine,
+                        fat: drinkData.nutritionGrande!.fat,
+                        sugar: drinkData.nutritionGrande!.sugar,
+                        protein: drinkData.nutritionGrande!.protein
+                    ) : nil
+                
+                let nutritionVenti = drinkData.nutritionVenti != nil ? 
+                    Nutrition(
+                        calories: drinkData.nutritionVenti!.calories,
+                        caffeine: drinkData.nutritionVenti!.caffeine,
+                        fat: drinkData.nutritionVenti!.fat,
+                        sugar: drinkData.nutritionVenti!.sugar,
+                        protein: drinkData.nutritionVenti!.protein
+                    ) : nil
+                
+                let category = DrinkCategory(rawValue: drinkData.category) ?? .other
+                
+                return Drink(
+                    name: drinkData.name,
+                    description: drinkData.description,
+                    imageURL: drinkData.imageURL,
+                    category: category,
+                    isFeatured: drinkData.isFeatured ?? false,
+                    isAvailable: true,
+                    nutritionTall: nutritionTall,
+                    nutritionGrande: nutritionGrande,
+                    nutritionVenti: nutritionVenti
+                )
+            }
+        } catch {
+            print("解析 JSON 文件时出错: \(error)")
+            return nil
+        }
+    }
+    
+    // 创建示例饮品数据（作为备用）
     private static func createSampleDrinks() -> [Drink] {
         var drinks: [Drink] = []
         
@@ -141,7 +205,7 @@ class DataManager {
         
         let espresso = Drink(
             name: "浓缩咖啡",
-            description: "精心萃取的浓缩咖啡，浓郁的风味与醇厚的口感。",
+            description: "精心萃取的浓缩咖啡，浓郁醇厚，是多种咖啡饮品的基础。",
             imageURL: "https://www.starbucks.com.cn/images/products/espresso.jpg",
             category: .espresso,
             nutritionTall: espressoTall,
@@ -150,24 +214,26 @@ class DataManager {
         )
         drinks.append(espresso)
         
-        // 热巧克力
-        let hotChocolateTall = Nutrition(calories: 320, caffeine: 15, fat: 12, sugar: 34, protein: 11)
-        let hotChocolateGrande = Nutrition(calories: 410, caffeine: 20, fat: 16, sugar: 43, protein: 14)
-        let hotChocolateVenti = Nutrition(calories: 500, caffeine: 25, fat: 19, sugar: 52, protein: 17)
-        
-        let hotChocolate = Drink(
-            name: "热巧克力",
-            description: "浓郁的巧克力与蒸汽牛奶混合，顶部饰以鲜奶油，温暖甜蜜。",
-            imageURL: "https://www.starbucks.com.cn/images/products/hot-chocolate.jpg",
-            category: .hotChocolate,
-            nutritionTall: hotChocolateTall,
-            nutritionGrande: hotChocolateGrande,
-            nutritionVenti: hotChocolateVenti
-        )
-        drinks.append(hotChocolate)
-        
-        // 添加更多饮品...
-        
         return drinks
     }
+}
+
+// JSON 解析用的数据结构
+struct DrinkData: Codable {
+    let name: String
+    let description: String
+    let imageURL: String?
+    let category: String
+    let isFeatured: Bool?
+    let nutritionTall: NutritionData?
+    let nutritionGrande: NutritionData?
+    let nutritionVenti: NutritionData?
+}
+
+struct NutritionData: Codable {
+    let calories: Int
+    let caffeine: Int
+    let fat: Double
+    let sugar: Double
+    let protein: Double
 } 

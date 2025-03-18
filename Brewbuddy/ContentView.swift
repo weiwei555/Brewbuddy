@@ -16,10 +16,12 @@ struct ContentView: View {
     @State private var showingDrinkDetail = false
     @State private var selectedDrink: Drink?
     @State private var showingFilterSheet = false
+    @State private var showingFavorites = false
     
     // 滚动相关状态
     @State private var scrollOffset: CGFloat = 0
     @State private var showScrollToTop = false
+    @State private var showFloatingFavoriteButton = false
     
     // 时间相关状态
     @State private var currentHour = Calendar.current.component(.hour, from: Date())
@@ -40,6 +42,11 @@ struct ContentView: View {
                 if showScrollToTop {
                     scrollToTopButton
                 }
+                
+                // 浮动收藏按钮
+                if showFloatingFavoriteButton {
+                    floatingFavoriteButton
+                }
             }
         }
         .sheet(isPresented: $showingDrinkDetail, onDismiss: {
@@ -48,7 +55,7 @@ struct ContentView: View {
         }) {
             if let drink = selectedDrink {
                 NavigationStack {
-                    DrinkDetailView(drink: drink)
+                    DrinkDetailView(drink: drink, viewModel: viewModel)
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarTrailing) {
@@ -67,11 +74,12 @@ struct ContentView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showingFavorites) {
+            FavoritesView(viewModel: viewModel)
+        }
         .onAppear {
-            // 预加载数据
-            if drinks.isEmpty {
-                DataManager.preloadSampleData(modelContext: modelContext)
-            }
+            // 清除旧数据并重新加载
+            clearAndReloadData()
             
             // 模拟加载过程
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -80,6 +88,21 @@ struct ContentView: View {
                 }
             }
         }
+    }
+    
+    // 清除旧数据并重新加载
+    private func clearAndReloadData() {
+        // 清除现有数据
+        do {
+            try modelContext.delete(model: Drink.self)
+            try modelContext.delete(model: Nutrition.self)
+            print("成功清除旧数据")
+        } catch {
+            print("清除数据时出错: \(error)")
+        }
+        
+        // 加载新数据
+        DataManager.preloadSampleData(modelContext: modelContext)
     }
     
     // 背景视图 - 米黄色到白色的温柔渐变
@@ -145,6 +168,9 @@ struct ContentView: View {
                 // 当滚动超过一定距离时显示回到顶部按钮
                 withAnimation {
                     showScrollToTop = offset < -200
+                    
+                    // 当滚动超过筛选区域时显示浮动收藏按钮
+                    showFloatingFavoriteButton = offset < -300
                 }
             }
             .onChange(of: showScrollToTop) { _, newValue in
@@ -209,6 +235,47 @@ struct ContentView: View {
     // 筛选控件区域
     private var filterSection: some View {
         VStack(spacing: 25) {
+            // 顶部操作按钮
+            HStack {
+                // 筛选按钮
+                Button(action: {
+                    showingFilterSheet = true
+                    // 触觉反馈
+                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    generator.impactOccurred()
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "slider.horizontal.3")
+                        Text("筛选")
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.brown.opacity(0.1))
+                    .foregroundColor(Color.brown)
+                    .cornerRadius(8)
+                }
+                
+                Spacer()
+                
+                // 收藏按钮
+                Button(action: {
+                    showingFavorites = true
+                    // 触觉反馈
+                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    generator.impactOccurred()
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "heart.fill")
+                        Text("我的收藏")
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.red.opacity(0.1))
+                    .foregroundColor(Color.red)
+                    .cornerRadius(8)
+                }
+            }
+            
             // 卡路里滑块
             SliderControl(
                 value: $viewModel.caloriesThreshold,
@@ -231,9 +298,6 @@ struct ContentView: View {
             
             // 饮品类别选择
             categorySelectionView
-            
-            // 杯型选择
-            sizeSelectionView
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 25)
@@ -279,7 +343,7 @@ struct ContentView: View {
                 // 饮品列表
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 16)], spacing: 16) {
                     ForEach(filteredDrinks) { drink in
-                        DrinkCard(drink: drink, size: viewModel.selectedSize)
+                        DrinkCard(drink: drink)
                             .frame(height: 280)
                             .contentShape(Rectangle())
                             .onTapGesture {
@@ -351,28 +415,31 @@ struct ContentView: View {
         }
     }
     
-    // 杯型选择视图
-    private var sizeSelectionView: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("杯型选择")
-                .font(.headline)
-                .foregroundColor(Color.brown)
+    // 浮动收藏按钮
+    private var floatingFavoriteButton: some View {
+        Button(action: {
+            showingFavorites = true
             
-            HStack(spacing: 15) {
-                ForEach(DrinkSize.allCases) { size in
-                    SizeSelectionButton(
-                        size: size,
-                        isSelected: viewModel.selectedSize == size,
-                        action: {
-                            viewModel.selectedSize = size
-                            // 触觉反馈
-                            let generator = UIImpactFeedbackGenerator(style: .light)
-                            generator.impactOccurred()
-                        }
-                    )
-                }
+            // 触觉反馈
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: "heart.fill")
+                Text("收藏")
             }
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Color.red)
+            .clipShape(Capsule())
+            .shadow(color: Color.black.opacity(0.2), radius: 5, x: 0, y: 3)
         }
+        .padding(.trailing, 20)
+        .padding(.bottom, showScrollToTop ? 80 : 20) // 如果回到顶部按钮显示，则调整位置
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
     
     // 根据时间获取问候语
@@ -522,52 +589,6 @@ struct CategoryButton: View {
     }
 }
 
-// 杯型选择按钮
-struct SizeSelectionButton: View {
-    let size: DrinkSize
-    let isSelected: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                // 杯子图标
-                Image(systemName: "cup.and.saucer.fill")
-                    .font(.system(size: isSelected ? 24 : 20))
-                    .scaleEffect(getSizeScale())
-                
-                // 杯型名称
-                Text(size.rawValue)
-                    .font(.caption)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? Color.brown.opacity(0.1) : Color.gray.opacity(0.05))
-            )
-            .foregroundColor(Color.brown)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.brown : Color.clear, lineWidth: 1)
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-    
-    // 根据杯型获取图标大小
-    private func getSizeScale() -> CGFloat {
-        switch size {
-        case .tall:
-            return 0.8
-        case .grande:
-            return 1.0
-        case .venti:
-            return 1.2
-        }
-    }
-}
-
 // 筛选表单视图
 struct FilterSheetView: View {
     @ObservedObject var viewModel: DrinkViewModel
@@ -618,15 +639,6 @@ struct FilterSheetView: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
-                }
-                
-                Section(header: Text("杯型选择")) {
-                    Picker("选择杯型", selection: $viewModel.selectedSize) {
-                        ForEach(DrinkSize.allCases) { size in
-                            Text(size.rawValue).tag(size)
-                        }
-                    }
-                    .pickerStyle(SegmentedPickerStyle())
                 }
                 
                 Section {

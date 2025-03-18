@@ -12,7 +12,7 @@ struct DrinkDetailView: View {
     @State private var selectedSize: DrinkSize = .grande
     @State private var animateContent: Bool = false
     @State private var showingNutritionDetails = false
-    @State private var addedToFavorites = false
+    @ObservedObject var viewModel: DrinkViewModel
     @Environment(\.dismiss) private var dismiss
     
     // 触觉反馈生成器
@@ -148,9 +148,27 @@ struct DrinkDetailView: View {
     // 名称和描述区域
     private var nameAndDescriptionSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(drink.name)
-                .font(.largeTitle)
-                .fontWeight(.bold)
+            HStack(alignment: .top) {
+                Text(drink.name)
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                
+                Spacer()
+                
+                // 收藏按钮
+                Button(action: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        viewModel.toggleFavorite(drink: drink)
+                        feedbackGenerator.impactOccurred()
+                    }
+                }) {
+                    Image(systemName: viewModel.isFavorite(drink: drink) ? "heart.fill" : "heart")
+                        .font(.system(size: 24))
+                        .foregroundColor(viewModel.isFavorite(drink: drink) ? .red : .gray)
+                }
+                .padding(8)
+                .contentShape(Circle())
+            }
             
             Text(drink.drinkDescription)
                 .font(.body)
@@ -252,26 +270,6 @@ struct DrinkDetailView: View {
     // 操作按钮区域
     private var actionButtonsSection: some View {
         VStack(spacing: 15) {
-            // 收藏按钮
-            Button(action: {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    addedToFavorites.toggle()
-                    feedbackGenerator.impactOccurred()
-                }
-            }) {
-                HStack {
-                    Image(systemName: addedToFavorites ? "heart.fill" : "heart")
-                        .foregroundColor(addedToFavorites ? .red : .primary)
-                    
-                    Text(addedToFavorites ? "已收藏" : "收藏")
-                        .fontWeight(.semibold)
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color(UIColor.secondarySystemBackground))
-                .cornerRadius(12)
-            }
-            
             // 下单按钮
             Button(action: {
                 // 下单逻辑
@@ -456,8 +454,8 @@ struct NutritionCircle: View {
     // 计算圆圈大小比例
     private var sizeRatio: CGFloat {
         let ratio = min(actualValue / maxValue, 1.0)
-        // 确保即使是很小的值也有一个最小尺寸
-        return max(0.4, ratio)
+        // 使用更温和的比例变化，确保即使是很小的值也有一个合理的最小尺寸
+        return 0.6 + (ratio * 0.4) // 范围从0.6到1.0，变化更小
     }
     
     // 获取咖啡因的持续时间描述
@@ -485,6 +483,15 @@ struct NutritionCircle: View {
         return nil
     }
     
+    // 获取糖分的对照信息
+    private var sugarComparison: String? {
+        if label.contains("糖分") {
+            // 一罐可乐约含35克糖
+            return String(format: "≈ %.1f罐可乐", actualValue / 35)
+        }
+        return nil
+    }
+    
     var body: some View {
         VStack(spacing: 8) {
             ZStack {
@@ -498,10 +505,10 @@ struct NutritionCircle: View {
                     .stroke(color, lineWidth: 3)
                     .frame(width: 80 * sizeRatio, height: 80 * sizeRatio)
                 
-                // 数值
+                // 数值 - 固定大小，不随圆圈变化
                 VStack(spacing: 2) {
                     Text(value)
-                        .font(.system(size: 16 * sizeRatio))
+                        .font(.system(size: 16))
                         .fontWeight(.bold)
                         .foregroundColor(color)
                 }
@@ -516,7 +523,7 @@ struct NutritionCircle: View {
                 .fixedSize(horizontal: false, vertical: true)
             
             // 对照组信息
-            if let comparison = caffeineDescription ?? caloriesComparison {
+            if let comparison = caffeineDescription ?? caloriesComparison ?? sugarComparison {
                 Text(comparison)
                     .font(.caption2)
                     .foregroundColor(.secondary)
@@ -565,5 +572,7 @@ struct NutritionDetailRow: View {
         nutritionGrande: nutrition
     )
     
-    return DrinkDetailView(drink: drink)
+    let viewModel = DrinkViewModel()
+    
+    DrinkDetailView(drink: drink, viewModel: viewModel)
 } 

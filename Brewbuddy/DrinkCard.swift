@@ -9,7 +9,6 @@ import SwiftUI
 
 struct DrinkCard: View {
     let drink: Drink
-    let size: DrinkSize
     
     @State private var isPressed: Bool = false
     @State private var isHovered: Bool = false
@@ -75,24 +74,32 @@ struct DrinkCard: View {
                 .foregroundColor(Color.brown.opacity(0.7))
                 .lineLimit(2)
             
-            // 营养信息
-            if let nutrition = drink.nutrition(for: size) {
-                HStack(spacing: 16) {
-                    NutritionBadge(
-                        value: "\(nutrition.calories)",
-                        label: "卡路里",
-                        systemImage: "flame.fill",
-                        color: .orange,
-                        backgroundColor: Color.orange.opacity(0.1)
-                    )
+            // 营养信息 - 固定使用 Grande 杯型
+            if let nutrition = drink.nutritionGrande {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 16) {
+                        NutritionBadge(
+                            value: "\(nutrition.calories)",
+                            label: "卡路里",
+                            systemImage: "flame.fill",
+                            color: .orange,
+                            backgroundColor: Color.orange.opacity(0.1)
+                        )
+                        
+                        NutritionBadge(
+                            value: "\(nutrition.caffeine)mg",
+                            label: "咖啡因",
+                            systemImage: "bolt.fill",
+                            color: .blue,
+                            backgroundColor: Color.blue.opacity(0.1)
+                        )
+                    }
                     
-                    NutritionBadge(
-                        value: "\(nutrition.caffeine)mg",
-                        label: "咖啡因",
-                        systemImage: "bolt.fill",
-                        color: .blue,
-                        backgroundColor: Color.blue.opacity(0.1)
-                    )
+                    // 添加说明文字
+                    Text("基于大杯(Grande)规格")
+                        .font(.caption2)
+                        .foregroundColor(Color.gray)
+                        .padding(.top, 4)
                 }
             }
         }
@@ -193,7 +200,7 @@ struct NutritionBadge: View {
         nutritionGrande: nutrition
     )
     
-    return DrinkCard(drink: drink, size: .grande)
+    return DrinkCard(drink: drink)
         .frame(width: 300)
         .padding()
         .background(Color(red: 0.98, green: 0.95, blue: 0.9))

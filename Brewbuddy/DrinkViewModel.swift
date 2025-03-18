@@ -18,6 +18,16 @@ class DrinkViewModel: ObservableObject {
     @Published var searchText: String = ""
     @Published var selectedSize: DrinkSize = .grande
     
+    // 收藏功能
+    @Published var favoriteDrinks: Set<String> = []
+    
+    init() {
+        // 从 UserDefaults 加载收藏的饮品
+        if let savedFavorites = UserDefaults.standard.stringArray(forKey: "FavoriteDrinks") {
+            favoriteDrinks = Set(savedFavorites)
+        }
+    }
+    
     // 获取筛选后的饮品列表
     func filteredDrinks(drinks: [Drink]) -> [Drink] {
         return drinks.filter { drink in
@@ -47,6 +57,28 @@ class DrinkViewModel: ObservableObject {
             
             return true
         }
+    }
+    
+    // 获取收藏的饮品
+    func getFavoriteDrinks(from allDrinks: [Drink]) -> [Drink] {
+        return allDrinks.filter { favoriteDrinks.contains($0.name) }
+    }
+    
+    // 切换饮品收藏状态
+    func toggleFavorite(drink: Drink) {
+        if favoriteDrinks.contains(drink.name) {
+            favoriteDrinks.remove(drink.name)
+        } else {
+            favoriteDrinks.insert(drink.name)
+        }
+        
+        // 保存到 UserDefaults
+        UserDefaults.standard.set(Array(favoriteDrinks), forKey: "FavoriteDrinks")
+    }
+    
+    // 检查饮品是否已收藏
+    func isFavorite(drink: Drink) -> Bool {
+        return favoriteDrinks.contains(drink.name)
     }
     
     // 根据心情应用筛选条件
